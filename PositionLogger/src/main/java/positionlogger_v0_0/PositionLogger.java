@@ -1,24 +1,45 @@
 package positionlogger_v0_0;
 
 import net.fabricmc.api.ModInitializer;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.network.ServerPlayerEntity;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.nio.file.Path;
 
 public class PositionLogger implements ModInitializer {
-	public static final String MOD_ID = "positionlogger";
 
-	// This logger is used to write text to the console and the log file.
-	// It is considered best practice to use your mod id as the logger's name.
-	// That way, it's clear which mod wrote info, warnings, and errors.
-	public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
+    private FileWriter writer;
 
-	@Override
-	public void onInitialize() {
-		// This code runs as soon as Minecraft is in a mod-load-ready state.
-		// However, some things (like resources) may still be uninitialized.
-		// Proceed with mild caution.
+    @Override
+    public void onInitialize() {
+        ServerTickEvents.END_SERVER_TICK.register(this::onServerTick);
+        System.out.println("[PositionLogger] Loaded");
+    }
 
-		LOGGER.info("Hello Fabric world!");
-	}
+    private void onServerTick(MinecraftServer server) {
+        try {
+            if (writer == null) {
+                Path logPath = server.getRunDirectory()
+                        .resolve("position_log.csv");
+                writer = new FileWriter(logPath.toFile(), true);
+            }
+
+            for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
+                writer.write(
+                    server.getTicks() + "," +
+                    player.getX() + "," +
+                    player.getY() + "," +
+                    player.getZ() + "\n"
+                );
+            }
+
+            writer.flush();
+
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
 }
