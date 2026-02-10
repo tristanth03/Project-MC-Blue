@@ -11,10 +11,16 @@ import net.minecraft.server.level.ServerPlayer;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.file.Path;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 
 public class PositionLogger implements ModInitializer {
 
     private FileWriter writer;
+    private boolean headerWritten = false;
+
+    private static final DateTimeFormatter TIMESTAMP_FORMAT =
+            DateTimeFormatter.ofPattern("yyyyMMdd_HHmm_SSS");
 
     @Override
     public void onInitialize() {
@@ -27,7 +33,8 @@ public class PositionLogger implements ModInitializer {
             try {
                 if (writer != null) {
                     writer.close();
-                    writer = null; // IMPORTANT: allow clean reopen
+                    writer = null;
+                    headerWritten = false;
                     System.out.println("[PositionLogger] File closed");
                 }
             } catch (IOException e) {
@@ -46,15 +53,20 @@ public class PositionLogger implements ModInitializer {
                         .getGameDir()
                         .resolve("position_log.csv");
                 writer = new FileWriter(logPath.toFile(), true);
+                writeHeaderIfNeeded();
             }
 
             // Stable tick counter (increments every server tick)
             long tick = server.overworld().getGameTime();
+            String timestamp = LocalDateTime.now().format(TIMESTAMP_FORMAT);
 
             // Log each player's position
             for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+
+                String id = "0_" + tick + "__" + timestamp;
+
                 writer.write(
-                        tick + "," +
+                        id + "," +
                         player.getX() + "," +
                         player.getY() + "," +
                         player.getZ() + "\n"
@@ -65,6 +77,18 @@ public class PositionLogger implements ModInitializer {
 
         } catch (IOException e) {
             e.printStackTrace();
+        }
+    }
+
+    private void writeHeaderIfNeeded() throws IOException {
+        if (!headerWritten) {
+            writer.write(
+                    "ID," +
+                    "PlayerCords_XPos," +
+                    "PlayerCords_YPos," +
+                    "PlayerCords_ZPos\n"
+            );
+            headerWritten = true;
         }
     }
 }
