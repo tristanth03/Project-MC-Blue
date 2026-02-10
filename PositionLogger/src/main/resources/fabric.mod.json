@@ -1,38 +1,21 @@
 {
-	"schemaVersion": 1,
-	"id": "positionlogger",
-	"version": "${version}",
-	"name": "PositionLogger",
-	"description": "This is an example description! Tell everyone what your mod is about!",
-	"authors": [
-		"Me!"
-	],
-	"contact": {
-		"homepage": "https://fabricmc.net/",
-		"sources": "https://github.com/FabricMC/fabric-example-mod"
-	},
-	"license": "CC0-1.0",
-	"icon": "assets/positionlogger/icon.png",
-	"environment": "*",
-	"entrypoints": {
-		"main": [
-			"positionlogger_v0_0.PositionLogger"
-		],
-		"client": [
-			"positionlogger_v0_0.PositionLoggerClient"
-		]
-	},
-	"mixins": [
-		"positionlogger.mixins.json",
-		{
-			"config": "positionlogger.client.mixins.json",
-			"environment": "client"
-		}
-	],
-	"depends": {
-		"fabricloader": ">=0.18.4",
-		"minecraft": "~1.21.11",
-		"java": ">=21",
-		"fabric-api": "*"
-	}
+  "schemaVersion": 1,
+  "id": "positionlogger",
+  "version": "${version}",
+  "name": "PositionLogger",
+  "description": "Logs player position at 20 TPS",
+  "authors": ["Me"],
+  "license": "CC0-1.0",
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "positionlogger_v0_0.PositionLogger"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.18.4",
+    "minecraft": "~1.21.11",
+    "java": ">=21",
+    "fabric-api": "*"
+  }
 }
