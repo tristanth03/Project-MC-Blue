@@ -3,7 +3,7 @@
 ## ID (string)
 * Format: number_InGameTick__realTimeStamp
     * With realTimeStamp : yyyyMMdd_HHmm_SSS
-    * e.g. 0_1233__20260210_519
+    * e.g. 0_1233__20260210_519 
 
 
 ## PlayerCords
@@ -28,7 +28,10 @@
 * FoodLevel ($\in [0,20]\cap \mathbb{N}_0$; stored as an int)
 
 ## PlayerEnvironment
-* Biome
+* Biome (string)
+    * e.g. frozen_lake
 
 ## PlayerViewingEnvironment
-* See 
+* ViewingMobFlag ($\in \{0,1\}$; stored as boolean)
+    * Mob or even mobs that are clearly visable withing viewing cone and ray
+    * Notes: Roughly works as the graphics do (example where it might possible fail: a heard of small mobs very far away underwater), every hostile mob is seen before it can do damage similar when the graphics renders.
