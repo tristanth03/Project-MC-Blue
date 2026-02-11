@@ -12,6 +12,7 @@ import net.minecraft.world.entity.Mob;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 
+
 import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.file.Path;
@@ -37,6 +38,8 @@ public class PositionLogger implements ModInitializer {
     // Peripheral awareness radius
     private static final double PERIPHERAL_RADIUS = 3.0;
     private static final double PERIPHERAL_DISTANCE_LIMIT = 8.0;
+
+    private boolean wasViewingMobLastTick = false;
 
     @Override
     public void onInitialize() {
@@ -90,18 +93,27 @@ public class PositionLogger implements ModInitializer {
                 int food = player.getFoodData().getFoodLevel();
 
                 // Biome (1.15-safe, player-perceivable)
-                String biome = player.level()
+                String biomeRaw = player.level()
                         .getBiome(player.blockPosition())
                         .toString();
+
+                // Find last ":" (before biome name)
+                int colon = biomeRaw.lastIndexOf(":");
+
+                // Find closing bracket after biome name
+                int endBracket = biomeRaw.indexOf("]", colon);
+
+                // Extract biome name
+                String biome = biomeRaw.substring(colon + 1, endBracket);
 
                 // Determine visible distance via block raycast
                 HitResult blockHit = player.pick(MAX_VIEW_DISTANCE, 0.0f, false);
                 double visibleDistance = blockHit.getType() == HitResult.Type.MISS
                         ? MAX_VIEW_DISTANCE
                         : blockHit.getLocation().distanceTo(eye);
-
-                // Eyesight-volume mob detection
-                boolean viewingMob = false;
+      
+                // Ray end point (limited by visible distance)
+                Vec3 rayEnd = eye.add(look.scale(visibleDistance));
 
                 List<Entity> candidates = player.level().getEntities(
                         player,
@@ -111,7 +123,17 @@ public class PositionLogger implements ModInitializer {
                         e -> e instanceof Mob
                 );
 
+                boolean detectedThisTick = false;
+
+                // Slight cone fallback for distant mobs
+                double FOV_DOT = 0.990;  // ~8° cone
+
                 for (Entity entity : candidates) {
+
+                    if (entity.getBoundingBox().inflate(0.1).clip(eye, rayEnd).isPresent()) {
+                        detectedThisTick = true;
+                        break;
+                    }
 
                     Vec3 toEntity = entity.getBoundingBox()
                             .getCenter()
@@ -123,20 +145,19 @@ public class PositionLogger implements ModInitializer {
                     Vec3 dir = toEntity.normalize();
                     double dot = look.dot(dir);
 
-                    // Foveal vision (strong focus)
-                    if (dot > FOVEAL_DOT) {
-                        viewingMob = true;
-                        break;
-                    }
-
-                    // Peripheral awareness (small / fast mobs)
-                    if (dot > PERIPHERAL_DOT && distance < PERIPHERAL_DISTANCE_LIMIT) {
-                        viewingMob = true;
+                    if (dot > FOV_DOT) {
+                        detectedThisTick = true;
                         break;
                     }
                 }
 
+                // 1-tick smoothing
+                boolean viewingMob = detectedThisTick || wasViewingMobLastTick;
+                wasViewingMobLastTick = detectedThisTick;
+
                 int viewingMobFlag = viewingMob ? 1 : 0;
+
+
 
                 writer.write(
                         id + "," +
