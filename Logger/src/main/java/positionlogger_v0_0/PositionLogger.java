@@ -1,9 +1,18 @@
 package positionlogger_v0_0;
 
+import java.util.Map;
+import java.util.HashMap;
+
+
+
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.loader.api.FabricLoader;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.LightLayer;
+
+
 
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
@@ -11,7 +20,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
-
+import net.minecraft.core.registries.BuiltInRegistries;
 
 import java.io.FileWriter;
 import java.io.IOException;
@@ -40,6 +49,9 @@ public class PositionLogger implements ModInitializer {
     private static final double PERIPHERAL_DISTANCE_LIMIT = 8.0;
 
     private boolean wasViewingMobLastTick = false;
+    private String lastClosestViewingMobType = "none";
+    private String lastAllViewingMobs = "none";
+
 
     @Override
     public void onInitialize() {
@@ -87,6 +99,66 @@ public class PositionLogger implements ModInitializer {
                 // View information
                 Vec3 eye = player.getEyePosition();
                 Vec3 look = player.getLookAngle();
+                boolean outsideObservable = false;
+
+                Vec3[] directions = new Vec3[] {
+                        look,
+                        look.add(0.2, 0, 0).normalize(),
+                        look.add(-0.2, 0, 0).normalize(),
+                        look.add(0, 0.2, 0).normalize(),
+                        look.add(0, -0.2, 0).normalize()
+                };     
+
+                for (Vec3 dir : directions) {
+
+                    Vec3 rayEndSample = eye.add(dir.scale(MAX_VIEW_DISTANCE));
+
+                    HitResult hit = player.level().clip(
+                            new net.minecraft.world.level.ClipContext(
+                                    eye,
+                                    rayEndSample,
+                                    net.minecraft.world.level.ClipContext.Block.COLLIDER,
+                                    net.minecraft.world.level.ClipContext.Fluid.NONE,
+                                    player
+                            )
+                    );
+
+                    if (hit.getType() == HitResult.Type.MISS) {
+                        outsideObservable = true;
+                        break;
+                    }
+
+                    // Check if the hit position receives sky light
+                    BlockPos hitPos = BlockPos.containing(hit.getLocation());
+
+                    int skyLight = player.level().getBrightness(
+                            LightLayer.SKY,
+                            hitPos
+                    );
+
+                    if (skyLight > 0) {
+                        outsideObservable = true;
+                        break;
+                    }
+
+                }
+
+                int outsideObservableFlag = outsideObservable ? 1 : 0; 
+                // --- NightFlag logic ---
+                String nightFlag = "none";
+
+                boolean hasSky = player.level().dimensionType().hasSkyLight();
+
+                if (outsideObservable && hasSky) {
+
+                    long dayTime = player.level().getDayTime() % 24000L;
+
+                    // Vanilla night window: 13000–23000
+                    boolean isNight = dayTime >= 13000L && dayTime <= 23000L;
+
+                    nightFlag = isNight ? "1" : "0";
+                }
+         
 
                 // Player stats
                 double health = player.getHealth();
@@ -125,31 +197,59 @@ public class PositionLogger implements ModInitializer {
 
                 boolean detectedThisTick = false;
 
-                // Slight cone fallback for distant mobs
-                double FOV_DOT = 0.990;  // ~8° cone
+                Mob closestViewingMob = null;
+                double closestDistance = Double.MAX_VALUE;
+                Map<String, Integer> viewingMobCounts = new HashMap<>();
+                String allViewingMobs = "none";
 
+
+    
                 for (Entity entity : candidates) {
 
-                    if (entity.getBoundingBox().inflate(0.1).clip(eye, rayEnd).isPresent()) {
-                        detectedThisTick = true;
-                        break;
-                    }
-
-                    Vec3 toEntity = entity.getBoundingBox()
+                    Vec3 toEntityCenter = entity.getBoundingBox()
                             .getCenter()
                             .subtract(eye);
 
-                    double distance = toEntity.length();
+                    double distance = toEntityCenter.length();
                     if (distance > visibleDistance) continue;
 
-                    Vec3 dir = toEntity.normalize();
-                    double dot = look.dot(dir);
+                    boolean isVisible = false;
 
-                    if (dot > FOV_DOT) {
-                        detectedThisTick = true;
-                        break;
+                    if (entity.getBoundingBox().inflate(0.1).clip(eye, rayEnd).isPresent()) {
+                        isVisible = true;
+                    } else {
+                        Vec3 dir = toEntityCenter.normalize();
+                        double dot = look.dot(dir);
+
+                        double FOV_DOT = 0.0; // ~180°
+                        if (dot > FOV_DOT) {
+                            isVisible = true;
+                        }
                     }
+                    if (isVisible) {
+                        detectedThisTick = true;
+
+                        // Get mob type name
+                        String mobType =
+                                BuiltInRegistries.ENTITY_TYPE
+                                        .getKey(entity.getType())
+                                        .getPath();
+
+                        // Count occurrences
+                        viewingMobCounts.put(
+                                mobType,
+                                viewingMobCounts.getOrDefault(mobType, 0) + 1
+                        );
+
+                        // Track closest
+                        if (distance < closestDistance) {
+                            closestDistance = distance;
+                            closestViewingMob = (Mob) entity;
+                        }
+                    }
+
                 }
+
 
                 // 1-tick smoothing
                 boolean viewingMob = detectedThisTick || wasViewingMobLastTick;
@@ -157,7 +257,38 @@ public class PositionLogger implements ModInitializer {
 
                 int viewingMobFlag = viewingMob ? 1 : 0;
 
+                String closestViewingMobType = "none";
 
+                if (closestViewingMob != null) {
+                    closestViewingMobType =
+                            BuiltInRegistries.ENTITY_TYPE
+                                    .getKey(closestViewingMob.getType())
+                                    .getPath();
+                }
+
+
+                if (!viewingMobCounts.isEmpty()) {
+                    StringBuilder sb = new StringBuilder();
+
+                    for (Map.Entry<String, Integer> entry : viewingMobCounts.entrySet()) {
+                        sb.append(entry.getKey())
+                        .append(" : ")
+                        .append(entry.getValue())
+                        .append("; ");
+                    }
+
+                    // Remove trailing comma + space
+                    sb.setLength(sb.length() - 2);
+
+                    allViewingMobs = sb.toString();
+                }
+                if (detectedThisTick) {
+                    lastClosestViewingMobType = closestViewingMobType;
+                    lastAllViewingMobs = allViewingMobs;
+                } else if (viewingMob) {
+                    closestViewingMobType = lastClosestViewingMobType;
+                    allViewingMobs = lastAllViewingMobs;
+                }
 
                 writer.write(
                         id + "," +
@@ -166,7 +297,11 @@ public class PositionLogger implements ModInitializer {
                         health + "," +
                         food + "," +
                         biome + "," +
-                        viewingMobFlag + "\n"
+                        outsideObservableFlag + "," +
+                        nightFlag + "," +
+                        viewingMobFlag + "," + 
+                        closestViewingMobType + "," +
+                        allViewingMobs + "\n"
                 );
             }
 
@@ -190,7 +325,12 @@ public class PositionLogger implements ModInitializer {
                     "PlayerStats_Health," +
                     "PlayerStats_FoodLevel," +
                     "PlayerEnvironment_Biome," +
-                    "PlayerViewingEnvironment_Mob\n"
+                    "PlayerViewingEnvironment_OutsideObservableFlag," +
+                    "PlayerViewingEnvironment_NightFlag," +
+                    "PlayerViewingEnvironment_MobFlag," +
+                    "PlayerViewingEnvironment_ClosestViewingMobType," +
+                    "PlayerViewingEnvironment_AllViewingMobs\n"
+
             );
             headerWritten = true;
         }
