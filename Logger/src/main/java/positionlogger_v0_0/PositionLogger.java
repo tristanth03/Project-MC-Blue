@@ -180,6 +180,25 @@ public class PositionLogger implements ModInitializer {
 
                 // Determine visible distance via block raycast
                 HitResult blockHit = player.pick(MAX_VIEW_DISTANCE, 0.0f, false);
+
+                // --- BlockHighlightedFlag ---
+                int blockHighlightedFlag =
+                        (blockHit.getType() == HitResult.Type.BLOCK) ? 1 : 0;
+
+                // --- HighlightedBlock ---
+                String highlightedBlock = "none";
+
+                if (blockHit.getType() == HitResult.Type.BLOCK) {
+
+                    BlockPos hitPos = BlockPos.containing(blockHit.getLocation());
+
+                    highlightedBlock =
+                            BuiltInRegistries.BLOCK
+                                    .getKey(player.level().getBlockState(hitPos).getBlock())
+                                    .getPath();
+}
+
+
                 double visibleDistance = blockHit.getType() == HitResult.Type.MISS
                         ? MAX_VIEW_DISTANCE
                         : blockHit.getLocation().distanceTo(eye);
@@ -299,6 +318,8 @@ public class PositionLogger implements ModInitializer {
                         biome + "," +
                         outsideObservableFlag + "," +
                         nightFlag + "," +
+                        blockHighlightedFlag + "," +
+                        highlightedBlock + "," +
                         viewingMobFlag + "," + 
                         closestViewingMobType + "," +
                         allViewingMobs + "\n"
@@ -327,6 +348,8 @@ public class PositionLogger implements ModInitializer {
                     "PlayerEnvironment_Biome," +
                     "PlayerViewingEnvironment_OutsideObservableFlag," +
                     "PlayerViewingEnvironment_NightFlag," +
+                    "PlayerViewingEnvironment_BlockHighlightedFlag," +
+                    "PlayerViewingEnvironment_HighlightedBlock," +
                     "PlayerViewingEnvironment_MobFlag," +
                     "PlayerViewingEnvironment_ClosestViewingMobType," +
                     "PlayerViewingEnvironment_AllViewingMobs\n"

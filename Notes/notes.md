@@ -44,6 +44,14 @@
     * e.g. 1 (if there is night and it is observable, but for instance is "none" if one is inside a deep cave with no openening)
     * ! *Possibly update s.t. it works in the nether, end etc...* 
 
+
+#### Blocks
+* BlockHighlightedFlag ($\in \{0,1\}$; stored as boolean)
+    * Whether a block is highlighted or not
+
+* HighlightedBlock (string)
+    * e.g. coblestone
+
 #### Mobs
 * ViewingMobFlag ($\in \{0,1\}$; stored as boolean)
     * Mob or even mobs that are clearly visable withing viewing cone and ray
@@ -56,13 +64,6 @@
 * AllViewingMobs (semi-comma seperated string, with naming and count)
     * e.g. cow : 1; chicken : 2
 
-
-#### Blocks
-* BlockHighlighted ($\in \{0,1\}$; stored as boolean)
-    * Whether a block is highlighted or not
-
-* HighlightedBlock (string)
-    * e.g. coblestone
 
 
 ## Inventory
