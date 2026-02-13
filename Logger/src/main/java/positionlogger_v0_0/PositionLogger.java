@@ -3,15 +3,18 @@ package positionlogger_v0_0;
 import java.util.Map;
 import java.util.HashMap;
 
-
-
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.LightLayer;
+import net.minecraft.world.level.ClipContext;
 
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.shapes.VoxelShape;
 
 
 import net.minecraft.server.MinecraftServer;
@@ -25,24 +28,24 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.file.Path;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
+
+
+
 
 public class PositionLogger implements ModInitializer {
 
     private FileWriter writer;
     private boolean headerWritten = false;
 
-    private static final DateTimeFormatter TIMESTAMP_FORMAT =
-            DateTimeFormatter.ofPattern("yyyyMMdd_HHmm_SSS");
+    private static final DateTimeFormatter ISO_FORMAT =
+        DateTimeFormatter.ISO_INSTANT;
 
     // Vision parameters (human-like)
     private static final double MAX_VIEW_DISTANCE = 64.0;
-
-    // Foveal (~5°) and peripheral (~14°) cones
-    private static final double FOVEAL_DOT = 0.996;
-    private static final double PERIPHERAL_DOT = 0.97;
 
     // Peripheral awareness radius
     private static final double PERIPHERAL_RADIUS = 3.0;
@@ -51,7 +54,6 @@ public class PositionLogger implements ModInitializer {
     private boolean wasViewingMobLastTick = false;
     private String lastClosestViewingMobType = "none";
     private String lastAllViewingMobs = "none";
-
 
     @Override
     public void onInitialize() {
@@ -79,13 +81,13 @@ public class PositionLogger implements ModInitializer {
             if (writer == null) {
                 Path logPath = FabricLoader.getInstance()
                         .getGameDir()
-                        .resolve("position_log.csv");
+                        .resolve("loggger.csv");
                 writer = new FileWriter(logPath.toFile(), true);
                 writeHeaderIfNeeded();
             }
 
             long tick = server.overworld().getGameTime();
-            String timestamp = LocalDateTime.now().format(TIMESTAMP_FORMAT);
+            String timestamp = ISO_FORMAT.format(Instant.now());
 
             for (ServerPlayer player : server.getPlayerList().getPlayers()) {
 
@@ -109,6 +111,7 @@ public class PositionLogger implements ModInitializer {
                         look.add(0, -0.2, 0).normalize()
                 };     
 
+                
                 for (Vec3 dir : directions) {
 
                     Vec3 rayEndSample = eye.add(dir.scale(MAX_VIEW_DISTANCE));
@@ -181,6 +184,11 @@ public class PositionLogger implements ModInitializer {
                 // Determine visible distance via block raycast
                 HitResult blockHit = player.pick(MAX_VIEW_DISTANCE, 0.0f, false);
 
+                double visibleDistance = blockHit.getType() == HitResult.Type.MISS
+                ? MAX_VIEW_DISTANCE
+                : blockHit.getLocation().distanceTo(eye);
+
+
                 // --- BlockHighlightedFlag ---
                 int blockHighlightedFlag =
                         (blockHit.getType() == HitResult.Type.BLOCK) ? 1 : 0;
@@ -195,14 +203,8 @@ public class PositionLogger implements ModInitializer {
                     highlightedBlock =
                             BuiltInRegistries.BLOCK
                                     .getKey(player.level().getBlockState(hitPos).getBlock())
-                                    .getPath();
-}
-
-
-                double visibleDistance = blockHit.getType() == HitResult.Type.MISS
-                        ? MAX_VIEW_DISTANCE
-                        : blockHit.getLocation().distanceTo(eye);
-      
+                                    .getPath();}
+                   
                 // Ray end point (limited by visible distance)
                 Vec3 rayEnd = eye.add(look.scale(visibleDistance));
 
@@ -331,6 +333,21 @@ public class PositionLogger implements ModInitializer {
         } catch (IOException e) {
             e.printStackTrace();
         }
+    }
+
+    private static double degToRad(double deg) {
+        return deg * Math.PI / 180.0;
+    }
+
+    private static Vec3 dirFromYawPitch(double yawDeg, double pitchDeg) {
+        double yaw = degToRad(yawDeg);
+        double pitch = degToRad(pitchDeg);
+
+        double x = -Math.sin(yaw) * Math.cos(pitch);
+        double y = -Math.sin(pitch);
+        double z =  Math.cos(yaw) * Math.cos(pitch);
+
+        return new Vec3(x, y, z);
     }
 
     private void writeHeaderIfNeeded() throws IOException {

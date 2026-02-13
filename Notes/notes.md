@@ -2,8 +2,8 @@
 
 ## ID (string)
 * Format: number_InGameTick__realTimeStamp
-    * With realTimeStamp : yyyyMMdd_HHmm_SSS
-    * e.g. 0_1233__20260210_519 
+    * With realTimeStamp : yyyyMMdd_HHmm_ss.z
+    * e.g.  
 
 
 ## PlayerCords
