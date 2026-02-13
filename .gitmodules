@@ -1,0 +1,3 @@
+[submodule "MALMO"]
+	path = MALMO
+	url = https://github.com/microsoft/malmo.git
