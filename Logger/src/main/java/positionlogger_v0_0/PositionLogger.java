@@ -50,7 +50,7 @@ public class PositionLogger implements ModInitializer {
         DateTimeFormatter.ISO_INSTANT;
 
     // Vision parameters (human-like)
-    private static final double MAX_VIEW_DISTANCE = 128.0;
+    private static final double MAX_VIEW_DISTANCE = 64.0;
 
     // Peripheral awareness radius
     private static final double PERIPHERAL_RADIUS = 3.0;
@@ -61,7 +61,7 @@ public class PositionLogger implements ModInitializer {
     private String lastAllViewingMobs = "none";
 
     // --- Vision-ish block sampling (first-hit surface only) ---
-    private static final double BLOCK_SAMPLE_MAX_DISTANCE = 128.0;
+    private static final double BLOCK_SAMPLE_MAX_DISTANCE = 64.0;
 
     // Ray grid. 12x7 = 84 rays; tune as needed.
     private static final int SAMPLE_W = 128;
@@ -182,8 +182,9 @@ public class PositionLogger implements ModInitializer {
             String timestamp = ISO_FORMAT.format(Instant.now());
 
             for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+                String playerName = player.getName().getString();
+                String id = playerName + "_" + tick + "_" + timestamp;
 
-                String id = "0_" + tick + "__" + timestamp;
 
                 // Player position
                 double px = player.getX();
