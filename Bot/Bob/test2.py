@@ -9,7 +9,7 @@ mineFlayer = require('mineflayer')
 bot = mineFlayer.createBot({
     'host': 'localhost',
     'port': 27000,
-    'username': 'Bob'
+    'username': 'Long'
 })
 
 @On(bot, 'login')
