@@ -2,6 +2,9 @@ package positionlogger_v0_0;
 
 import java.util.Map;
 import java.util.HashMap;
+import java.util.Comparator;
+import java.util.stream.Collectors;
+
 
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
@@ -24,6 +27,8 @@ import net.minecraft.world.entity.Mob;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.world.item.ItemStack;
+
 
 import java.io.FileWriter;
 import java.io.IOException;
@@ -45,7 +50,7 @@ public class PositionLogger implements ModInitializer {
         DateTimeFormatter.ISO_INSTANT;
 
     // Vision parameters (human-like)
-    private static final double MAX_VIEW_DISTANCE = 64.0;
+    private static final double MAX_VIEW_DISTANCE = 128.0;
 
     // Peripheral awareness radius
     private static final double PERIPHERAL_RADIUS = 3.0;
@@ -54,6 +59,25 @@ public class PositionLogger implements ModInitializer {
     private boolean wasViewingMobLastTick = false;
     private String lastClosestViewingMobType = "none";
     private String lastAllViewingMobs = "none";
+
+    // --- Vision-ish block sampling (first-hit surface only) ---
+    private static final double BLOCK_SAMPLE_MAX_DISTANCE = 128.0;
+
+    // Ray grid. 12x7 = 84 rays; tune as needed.
+    private static final int SAMPLE_W = 128;
+    private static final int SAMPLE_H = 64;
+
+    // Approximate FOV. Tune if desired.
+    private static final double FOV_DEG_H = 90.0;
+    private static final double FOV_DEG_V = 90.0;
+
+    private static final Vec3 WORLD_UP = new Vec3(0, 1, 0);
+
+    // Precomputed normalized screen coords in [-1, 1]
+    private final double[] sampleU = new double[SAMPLE_W];
+    private final double[] sampleV = new double[SAMPLE_H];
+    private boolean blockSamplerInited = false;
+
 
     @Override
     public void onInitialize() {
@@ -75,6 +99,74 @@ public class PositionLogger implements ModInitializer {
 
         System.out.println("[PositionLogger] Loaded");
     }
+
+    private void initBlockSamplerIfNeeded() {
+        if (blockSamplerInited) return;
+
+        for (int x = 0; x < SAMPLE_W; x++) {
+            double nx = (x + 0.5) / (double) SAMPLE_W; // 0..1
+            sampleU[x] = nx * 2.0 - 1.0;               // -1..1
+        }
+        for (int y = 0; y < SAMPLE_H; y++) {
+            double ny = (y + 0.5) / (double) SAMPLE_H; // 0..1
+            sampleV[y] = 1.0 - ny * 2.0;               // +1..-1 (top->bottom)
+        }
+
+        blockSamplerInited = true;
+    }
+    private Map<String, Integer> sampleVisibleBlocks(ServerPlayer player) {
+
+        initBlockSamplerIfNeeded();
+
+        Map<String, java.util.HashSet<BlockPos>> seen = new HashMap<>();
+
+        Vec3 eye = player.getEyePosition();
+        Vec3 forward = player.getLookAngle().normalize();
+
+        Vec3 right = forward.cross(WORLD_UP);
+        if (right.lengthSqr() < 1e-8) right = new Vec3(1, 0, 0);
+        else right = right.normalize();
+        Vec3 up = right.cross(forward).normalize();
+
+        double tanH = Math.tan(Math.toRadians(FOV_DEG_H * 0.5));
+        double tanV = Math.tan(Math.toRadians(FOV_DEG_V * 0.5));
+
+        for (int yi = 0; yi < SAMPLE_H; yi++) {
+            double v = sampleV[yi] * tanV;
+
+            for (int xi = 0; xi < SAMPLE_W; xi++) {
+                double u = sampleU[xi] * tanH;
+
+                Vec3 dir = forward.add(right.scale(u)).add(up.scale(v)).normalize();
+                Vec3 end = eye.add(dir.scale(BLOCK_SAMPLE_MAX_DISTANCE));
+
+                HitResult hit = player.level().clip(new ClipContext(
+                        eye, end,
+                        ClipContext.Block.OUTLINE, // keep OUTLINE so plants can be hit
+                        ClipContext.Fluid.ANY,
+                        player
+                ));
+
+                if (hit.getType() != HitResult.Type.BLOCK) continue;
+
+                BlockPos hitPos = ((BlockHitResult) hit).getBlockPos();
+                BlockState bs = player.level().getBlockState(hitPos);
+
+                String blockKey = BuiltInRegistries.BLOCK
+                        .getKey(bs.getBlock())
+                        .getPath();
+
+                seen.computeIfAbsent(blockKey, k -> new java.util.HashSet<>()).add(hitPos);
+            }
+        }
+
+        Map<String, Integer> uniqueCounts = new HashMap<>();
+        for (Map.Entry<String, java.util.HashSet<BlockPos>> e : seen.entrySet()) {
+            uniqueCounts.put(e.getKey(), e.getValue().size());
+        }
+        return uniqueCounts;
+    }
+
 
     private void onServerTick(MinecraftServer server) {
         try {
@@ -102,6 +194,34 @@ public class PositionLogger implements ModInitializer {
                 Vec3 eye = player.getEyePosition();
                 Vec3 look = player.getLookAngle();
                 boolean outsideObservable = false;
+
+                // --- Hotbar (9 slots) ---
+                ItemStack hb1 = player.getInventory().getItem(0);
+                ItemStack hb2 = player.getInventory().getItem(1);
+                ItemStack hb3 = player.getInventory().getItem(2);
+                ItemStack hb4 = player.getInventory().getItem(3);
+                ItemStack hb5 = player.getInventory().getItem(4);
+                ItemStack hb6 = player.getInventory().getItem(5);
+                ItemStack hb7 = player.getInventory().getItem(6);
+                ItemStack hb8 = player.getInventory().getItem(7);
+                ItemStack hb9 = player.getInventory().getItem(8);
+
+                String item1Hotbar = formatHotbarSlot(hb1);
+                String item2Hotbar = formatHotbarSlot(hb2);
+                String item3Hotbar = formatHotbarSlot(hb3);
+                String item4Hotbar = formatHotbarSlot(hb4);
+                String item5Hotbar = formatHotbarSlot(hb5);
+                String item6Hotbar = formatHotbarSlot(hb6);
+                String item7Hotbar = formatHotbarSlot(hb7);
+                String item8Hotbar = formatHotbarSlot(hb8);
+                String item9Hotbar = formatHotbarSlot(hb9);
+
+
+                // --- Visible block sampling (first-hit surface only) ---
+                Map<String, Integer> visibleBlockCounts = sampleVisibleBlocks(player);
+                String visibleBlocks = blockCountsToString(visibleBlockCounts);
+                String visibleBlocksCsv = "\"" + visibleBlocks.replace("\"", "\"\"") + "\"";
+
 
                 Vec3[] directions = new Vec3[] {
                         look,
@@ -242,7 +362,7 @@ public class PositionLogger implements ModInitializer {
                         Vec3 dir = toEntityCenter.normalize();
                         double dot = look.dot(dir);
 
-                        double FOV_DOT = 0.0; // ~180°
+                        double FOV_DOT = Math.cos(Math.toRadians(45.0)) ; // ~90°
                         if (dot > FOV_DOT) {
                             isVisible = true;
                         }
@@ -322,9 +442,19 @@ public class PositionLogger implements ModInitializer {
                         nightFlag + "," +
                         blockHighlightedFlag + "," +
                         highlightedBlock + "," +
+                        visibleBlocksCsv + "," + 
                         viewingMobFlag + "," + 
                         closestViewingMobType + "," +
-                        allViewingMobs + "\n"
+                        allViewingMobs + "," +
+                        item1Hotbar + "," +
+                        item2Hotbar + "," +
+                        item3Hotbar + "," +
+                        item4Hotbar + "," +
+                        item5Hotbar + "," +
+                        item6Hotbar + "," +
+                        item7Hotbar + "," +
+                        item8Hotbar + "," +
+                        item9Hotbar + "\n"
                 );
             }
 
@@ -334,6 +464,31 @@ public class PositionLogger implements ModInitializer {
             e.printStackTrace();
         }
     }
+
+    private static String blockCountsToString(Map<String, Integer> counts) {
+        if (counts == null || counts.isEmpty()) return "none";
+
+        return counts.entrySet()
+                .stream()
+                .sorted(Comparator
+                        .<Map.Entry<String, Integer>>comparingInt(Map.Entry::getValue)
+                        .reversed()
+                        .thenComparing(Map.Entry::getKey)
+                )
+                .map(e -> e.getKey() + " : " + e.getValue())
+                .collect(Collectors.joining("; "));
+    }
+
+    private static String formatHotbarSlot(ItemStack stack) {
+        if (stack == null || stack.isEmpty()) return "none";
+
+        String itemName = BuiltInRegistries.ITEM.getKey(stack.getItem()).getPath();
+        int count = stack.getCount();
+
+        if (count <= 1) return itemName;
+        return itemName + " : " + count;
+    }
+
 
     private static double degToRad(double deg) {
         return deg * Math.PI / 180.0;
@@ -367,9 +522,19 @@ public class PositionLogger implements ModInitializer {
                     "PlayerViewingEnvironment_NightFlag," +
                     "PlayerViewingEnvironment_BlockHighlightedFlag," +
                     "PlayerViewingEnvironment_HighlightedBlock," +
+                    "PlayerViewingEnvironment_VisibleBlocks," +
                     "PlayerViewingEnvironment_MobFlag," +
                     "PlayerViewingEnvironment_ClosestViewingMobType," +
-                    "PlayerViewingEnvironment_AllViewingMobs\n"
+                    "PlayerViewingEnvironment_AllViewingMobs," +
+                    "Inventory_Item1Hotbar," + 
+                    "Inventory_Item2Hotbar," +
+                    "Inventory_Item3Hotbar," +
+                    "Inventory_Item4Hotbar," +
+                    "Inventory_Item5Hotbar," +
+                    "Inventory_Item6Hotbar," +
+                    "Inventory_Item7Hotbar," +
+                    "Inventory_Item8Hotbar," +
+                    "Inventory_Item9Hotbar\n"
 
             );
             headerWritten = true;

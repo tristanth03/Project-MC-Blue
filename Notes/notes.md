@@ -52,11 +52,17 @@
 * HighlightedBlock (string)
     * e.g. coblestone
 
+* VisibleBlocks (semi-comma seperated string, with naming and count)
+    * e.g. grass_block : 339; cobblestone : 13; oak_leaves : 13; oak_log : 8; oak_stairs : 7; white_terracotta : 6; stripped_oak_log : 4; mossy_cobblestone : 3; oak_planks : 3; stripped_oak_wood : 2; bell : 1; oak_fence : 1; oak_slab : 1
+
+    * ! *This is fixed at 8x8 chunks, to save compute*
+    
+
 #### Mobs
 * ViewingMobFlag ($\in \{0,1\}$; stored as boolean)
     * Mob or even mobs that are clearly visable withing viewing cone and ray
     * Notes: Roughly works as the graphics do.
-    * ! *Might be a bit to powerful (is set s.t. one is playing fullscreen with all visual at the maximum, including brightness, fps, chunks etc...)*
+    * ! *This is fixed at 8x8 chunks, to save compute*
 
 * ClosestViewingMobType (string)
     * e.g. cow 
