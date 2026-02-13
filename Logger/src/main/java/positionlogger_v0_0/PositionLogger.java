@@ -63,7 +63,6 @@ public class PositionLogger implements ModInitializer {
     // --- Vision-ish block sampling (first-hit surface only) ---
     private static final double BLOCK_SAMPLE_MAX_DISTANCE = 64.0;
 
-    // Ray grid. 12x7 = 84 rays; tune as needed.
     private static final int SAMPLE_W = 128;
     private static final int SAMPLE_H = 64;
 
@@ -196,26 +195,34 @@ public class PositionLogger implements ModInitializer {
                 Vec3 look = player.getLookAngle();
                 boolean outsideObservable = false;
 
-                // --- Hotbar (9 slots) ---
-                ItemStack hb1 = player.getInventory().getItem(0);
-                ItemStack hb2 = player.getInventory().getItem(1);
-                ItemStack hb3 = player.getInventory().getItem(2);
-                ItemStack hb4 = player.getInventory().getItem(3);
-                ItemStack hb5 = player.getInventory().getItem(4);
-                ItemStack hb6 = player.getInventory().getItem(5);
-                ItemStack hb7 = player.getInventory().getItem(6);
-                ItemStack hb8 = player.getInventory().getItem(7);
-                ItemStack hb9 = player.getInventory().getItem(8);
+                // ---------------- HOTBAR (0–8) ----------------
+                String[] hotbar = new String[9];
 
-                String item1Hotbar = formatHotbarSlot(hb1);
-                String item2Hotbar = formatHotbarSlot(hb2);
-                String item3Hotbar = formatHotbarSlot(hb3);
-                String item4Hotbar = formatHotbarSlot(hb4);
-                String item5Hotbar = formatHotbarSlot(hb5);
-                String item6Hotbar = formatHotbarSlot(hb6);
-                String item7Hotbar = formatHotbarSlot(hb7);
-                String item8Hotbar = formatHotbarSlot(hb8);
-                String item9Hotbar = formatHotbarSlot(hb9);
+                for (int i = 0; i < 9; i++) {
+                    hotbar[i] =
+                            formatSlot(player.getInventory().getItem(i));
+                }
+
+                // ---------------- MAIN INVENTORY (0–35) ----------------
+                // Includes hotbar again intentionally (full 36 slots)
+                String[] mainInventory = new String[36];
+
+                for (int i = 0; i < 36; i++) {
+                    mainInventory[i] =
+                            formatSlot(player.getInventory().getItem(i));
+                }
+
+                // ---------------- ARMOR ----------------
+                String[] armorInventory = new String[4];
+
+                armorInventory[0] = formatSlot(player.getItemBySlot(net.minecraft.world.entity.EquipmentSlot.HEAD));
+                armorInventory[1] = formatSlot(player.getItemBySlot(net.minecraft.world.entity.EquipmentSlot.CHEST));
+                armorInventory[2] = formatSlot(player.getItemBySlot(net.minecraft.world.entity.EquipmentSlot.LEGS));
+                armorInventory[3] = formatSlot(player.getItemBySlot(net.minecraft.world.entity.EquipmentSlot.FEET));
+
+                // ---------------- SHIELD / OFFHAND ----------------
+                String shieldSlot =
+                        formatSlot(player.getOffhandItem());
 
 
                 // --- Visible block sampling (first-hit surface only) ---
@@ -286,7 +293,8 @@ public class PositionLogger implements ModInitializer {
 
                 // Player stats
                 double health = player.getHealth();
-                int food = player.getFoodData().getFoodLevel();
+                double food = player.getFoodData().getFoodLevel();
+                double oxygen = player.getAirSupply(); 
 
                 // Biome (1.15-safe, player-perceivable)
                 String biomeRaw = player.level()
@@ -438,6 +446,7 @@ public class PositionLogger implements ModInitializer {
                         look.x + "," + look.y + "," + look.z + "," +
                         health + "," +
                         food + "," +
+                        oxygen + "," +
                         biome + "," +
                         outsideObservableFlag + "," +
                         nightFlag + "," +
@@ -446,17 +455,25 @@ public class PositionLogger implements ModInitializer {
                         visibleBlocksCsv + "," + 
                         viewingMobFlag + "," + 
                         closestViewingMobType + "," +
-                        allViewingMobs + "," +
-                        item1Hotbar + "," +
-                        item2Hotbar + "," +
-                        item3Hotbar + "," +
-                        item4Hotbar + "," +
-                        item5Hotbar + "," +
-                        item6Hotbar + "," +
-                        item7Hotbar + "," +
-                        item8Hotbar + "," +
-                        item9Hotbar + "\n"
-                );
+                        allViewingMobs + "," 
+                    );
+                        // --- Hotbar ---
+                        for (int i = 0; i < 9; i++) {
+                            writer.write(hotbar[i] + ",");
+                        }
+
+                        // --- Main Inventory ---
+                        for (int i = 0; i < 36; i++) {
+                            writer.write(mainInventory[i] + ",");
+                        }
+
+                        // --- Armor ---
+                        for (int i = 0; i < 4; i++) {
+                            writer.write(armorInventory[i] + ",");
+                        }
+
+                        // --- Shield ---
+                        writer.write(shieldSlot + "\n");
             }
 
             writer.flush();
@@ -480,7 +497,7 @@ public class PositionLogger implements ModInitializer {
                 .collect(Collectors.joining("; "));
     }
 
-    private static String formatHotbarSlot(ItemStack stack) {
+    private static String formatSlot(ItemStack stack) {
         if (stack == null || stack.isEmpty()) return "none";
 
         String itemName = BuiltInRegistries.ITEM.getKey(stack.getItem()).getPath();
@@ -518,6 +535,7 @@ public class PositionLogger implements ModInitializer {
                     "PlayerViewingCords_ZPos," +
                     "PlayerStats_Health," +
                     "PlayerStats_FoodLevel," +
+                    "PlayerStats_OxygenLevel," +
                     "PlayerEnvironment_Biome," +
                     "PlayerViewingEnvironment_OutsideObservableFlag," +
                     "PlayerViewingEnvironment_NightFlag," +
@@ -526,18 +544,27 @@ public class PositionLogger implements ModInitializer {
                     "PlayerViewingEnvironment_VisibleBlocks," +
                     "PlayerViewingEnvironment_MobFlag," +
                     "PlayerViewingEnvironment_ClosestViewingMobType," +
-                    "PlayerViewingEnvironment_AllViewingMobs," +
-                    "Inventory_Item1Hotbar," + 
-                    "Inventory_Item2Hotbar," +
-                    "Inventory_Item3Hotbar," +
-                    "Inventory_Item4Hotbar," +
-                    "Inventory_Item5Hotbar," +
-                    "Inventory_Item6Hotbar," +
-                    "Inventory_Item7Hotbar," +
-                    "Inventory_Item8Hotbar," +
-                    "Inventory_Item9Hotbar\n"
+                    "PlayerViewingEnvironment_AllViewingMobs,"  
+                );
+                    // Hotbar
+                    for (int i = 1; i <= 9; i++) {
+                        writer.write("PlayerInventory_Item" + i + "Hotbar,");
+                    }
 
-            );
+                    // Main Inventory
+                    for (int i = 1; i <= 36; i++) {
+                        writer.write("PlayerInventory_MainInventory_Item" + i + ",");
+                    }
+
+                    // Armor
+                    for (int i = 1; i <= 4; i++) {
+                        writer.write("PlayerInventory_Item" + i + "Armor,");
+                    }
+
+                    // Shield
+                    writer.write("PlayerInventory_ShieldSlot\n");
+
+
             headerWritten = true;
         }
     }

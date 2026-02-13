@@ -24,8 +24,9 @@
     * e.g. -0.73314
 
 ## PlayerStats
-* Health ($\in [0,20]\cap \mathbb{N}_0$; stored as an int)
-* FoodLevel ($\in [0,20]\cap \mathbb{N}_0$; stored as an int)
+* Health ($\in [0,20]$; stored as a double)
+* FoodLevel ($\in [0,20] $; stored as a double)
+* OxygenLevel ($\in [-19,300]$; stored as a double)
 
 ## PlayerEnvironment
 * Biome (string)
@@ -71,18 +72,60 @@
 
 
 ## Inventory
+
+
 #### Hotbar
-* Item1Hotbar (string)
+* Item1Hotbar (string; name: count)
     * e.g. shovel
-* Item2Hotbar (string)
+* Item2Hotbar (string; name: count)
     * e.g. apple : 4
-* Item3Hotbar (string)
-* Item4Hotbar (string)
-* Item5Hotbar (string)
-* Item6Hotbar (string)
-* Item7Hotbar (string)
-* Item8Hotbar (string)
-* Item9Hotbar (string)
+* Item3Hotbar (string; name: count)
+* Item4Hotbar (string; name: count)
+* Item5Hotbar (string; name: count)
+* Item6Hotbar (string; name: count)
+* Item7Hotbar (string; name: count)
+* Item8Hotbar (string; name: count)
+* Item9Hotbar (string; name: count)
+
+#### MainInventory
+* Item1 (string; name: count)
+    * e.g. apple
+* ...
+* Item36 (string; name: count)
+    * e.g oak_log : 37
+
+#### ArmorInventory
+* Item1Armor (string; name)
+* Item2Armor (string; name)
+* Item3Armor (string; name)
+* Item4Armor (string; name)
+* ShieldSlot (string; name : count)
+
+
+## PlayerAction
+
+#### Blocks
+* LastBlockHit (string)
+    * e.g. oak_log
+
+* LastBlockBroken (string)
+    * e.g. oak_log 
+
+* LastBlockPlaced (string)
+    * e.g. torch
+
+* LastBlockDamageTaken (string)
+    * e.g. lava
+
+
+#### Mobs
+* LastMobHit (string)
+    * e.g. cow
+
+* LastMobKilled (string)
+    * e.g. zombie
+
+
 
 
 
